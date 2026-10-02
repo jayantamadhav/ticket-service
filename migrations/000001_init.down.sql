@@ -1,0 +1,8 @@
+BEGIN;
+
+DROP TABLE IF EXISTS user_show_holds;
+DROP TABLE IF EXISTS reservations;
+DROP TABLE IF EXISTS seats;
+DROP TABLE IF EXISTS shows;
+
+COMMIT;
