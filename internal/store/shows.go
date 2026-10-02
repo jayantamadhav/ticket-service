@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jayantamadhav/ticket-service/internal/models"
@@ -82,7 +83,7 @@ func (s *Store) GetShowState(ctx context.Context, showID string) (*ShowState, er
 	}
 
 	rows, err := s.pool.Query(ctx, `
-		SELECT seat_label, status FROM seats WHERE show_id = $1 ORDER BY seat_label
+		SELECT seat_label, status, held_until FROM seats WHERE show_id = $1 ORDER BY seat_label
 	`, showID)
 	if err != nil {
 		return nil, fmt.Errorf("query seats: %w", err)
@@ -90,10 +91,17 @@ func (s *Store) GetShowState(ctx context.Context, showID string) (*ShowState, er
 	defer rows.Close()
 
 	state := &ShowState{ShowID: showID, Name: name}
+	now := time.Now()
 	for rows.Next() {
 		var label, status string
-		if err := rows.Scan(&label, &status); err != nil {
+		var heldUntil *time.Time
+		if err := rows.Scan(&label, &status, &heldUntil); err != nil {
 			return nil, fmt.Errorf("scan seat: %w", err)
+		}
+		// Lazy expiry on read: a held seat past its TTL displays as
+		// available, matching what Reserve's claim check already allows.
+		if status == "held" && heldUntil != nil && heldUntil.Before(now) {
+			status = "available"
 		}
 		state.Seats = append(state.Seats, SeatSummary{Label: label, Status: status})
 		switch status {
