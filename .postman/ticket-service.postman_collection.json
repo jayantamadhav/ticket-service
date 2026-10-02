@@ -1,0 +1,45 @@
+{
+  "info": {
+    "_postman_id": "fdff7f25-12f1-43f8-a8c3-c6e37b86c24c",
+    "name": "ticket-service",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "19365148",
+    "_collection_link": "https://go.postman.co/collection/19365148-fdff7f25-12f1-43f8-a8c3-c6e37b86c24c?source=collection_link"
+  },
+  "item": [
+    {
+      "name": "healthz",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/healthz",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "healthz"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "readyz",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/readyz",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "readyz"
+          ]
+        }
+      },
+      "response": []
+    }
+  ]
+}
