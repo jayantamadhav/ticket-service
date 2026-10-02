@@ -33,6 +33,7 @@ func main() {
 
 	st := store.New(pool)
 	showHandler := handlers.NewShowHandler(st)
+	reservationHandler := handlers.NewReservationHandler(st)
 
 	r := chi.NewRouter()
 
@@ -60,6 +61,8 @@ func main() {
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.RequireAuth)
 		r.Post("/shows/{id}/reserve", showHandler.Reserve)
+		r.Post("/reservations/{id}/confirm", reservationHandler.Confirm)
+		r.Post("/reservations/{id}/cancel", reservationHandler.Cancel)
 	})
 
 	logger.Info("server starting", "port", 8080)

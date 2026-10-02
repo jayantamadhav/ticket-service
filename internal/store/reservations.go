@@ -15,6 +15,7 @@ const HoldTTL = 45 * time.Second
 
 var (
 	ErrSeatUnavailable      = errors.New("seat unavailable")
+	ErrSeatNotFound         = errors.New("seat not found")
 	ErrPerUserLimitExceeded = errors.New("per-user limit exceeded")
 	ErrIdempotencyConflict  = errors.New("idempotency key reused with different request")
 	ErrShowNotFound         = errors.New("show not found")
@@ -35,7 +36,7 @@ func (s *Store) Reserve(ctx context.Context, showID, userID, idempotencyKey stri
 	}
 	defer tx.Rollback(ctx)
 
-	existing, err := checkIdempotency(ctx, tx, idempotencyKey, seatLabels)
+	existing, err := checkIdempotency(ctx, tx, userID, idempotencyKey, seatLabels)
 	if err != nil {
 		return nil, err
 	}
@@ -89,7 +90,7 @@ func (s *Store) Reserve(ctx context.Context, showID, userID, idempotencyKey stri
 	for _, label := range sortedSeats {
 		row, ok := found[label]
 		if !ok {
-			return nil, ErrSeatUnavailable
+			return nil, ErrSeatNotFound
 		}
 		isAvailable := row.status == "available"
 		isExpiredHold := row.status == "held" && row.heldUntil != nil && row.heldUntil.Before(now)
@@ -100,16 +101,23 @@ func (s *Store) Reserve(ctx context.Context, showID, userID, idempotencyKey stri
 
 	requestedCount := len(sortedSeats)
 	var newHeldCount int
-	err = tx.QueryRow(ctx, `
+		_, err = tx.Exec(ctx, `
 		INSERT INTO user_show_holds (show_id, user_id, held_count)
-		VALUES ($1, $2, $3)
-		ON CONFLICT (show_id, user_id)
-		DO UPDATE SET held_count = user_show_holds.held_count + $3
-		WHERE user_show_holds.held_count + $3 <= (
-			SELECT per_user_limit FROM shows WHERE id = $1
-		)
+		VALUES ($1, $2, 0)
+		ON CONFLICT (show_id, user_id) DO NOTHING
+	`, showID, userID)
+	if err != nil {
+		return nil, fmt.Errorf("ensure user_show_holds row: %w", err)
+	}
+
+	err = tx.QueryRow(ctx, `
+		UPDATE user_show_holds
+		SET held_count = held_count + $3
+		WHERE show_id = $1 AND user_id = $2
+		  AND held_count + $3 <= (SELECT per_user_limit FROM shows WHERE id = $1)
 		RETURNING held_count
 	`, showID, userID, requestedCount).Scan(&newHeldCount)
+	
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrPerUserLimitExceeded
 	}
@@ -149,13 +157,13 @@ func (s *Store) Reserve(ctx context.Context, showID, userID, idempotencyKey stri
 	return &reservation, nil
 }
 
-func checkIdempotency(ctx context.Context, tx pgx.Tx, idempotencyKey string, requestedSeats []string) (*models.Reservation, error) {
+func checkIdempotency(ctx context.Context, tx pgx.Tx, userID, idempotencyKey string, requestedSeats []string) (*models.Reservation, error) {
 	var r models.Reservation
 	err := tx.QueryRow(ctx, `
 		SELECT id, show_id, user_id, seats, amount_paise, status, created_at
 		FROM reservations
-		WHERE idempotency_key = $1
-	`, idempotencyKey).Scan(
+		WHERE idempotency_key = $1 AND user_id = $2
+	`, idempotencyKey, userID).Scan(
 		&r.ID, &r.ShowID, &r.UserID, &r.Seats, &r.AmountPaise, &r.Status, &r.CreatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {

@@ -25,5 +25,14 @@ func isDecline(err error) bool {
 }
 
 func isNotFound(err error) bool {
-	return errors.Is(err, store.ErrShowNotFound)
+	return errors.Is(err, store.ErrShowNotFound) || errors.Is(err, store.ErrReservationNotFound) || errors.Is(err, store.ErrSeatNotFound)
+}
+
+func isForbidden(err error) bool {
+	return errors.Is(err, store.ErrNotOwner)
+}
+
+func isReservationDecline(err error) bool {
+	return errors.Is(err, store.ErrAlreadyFinalized) ||
+		errors.Is(err, store.ErrHoldExpired)
 }
