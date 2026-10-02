@@ -10,6 +10,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jayantamadhav/ticket-service/internal/handlers"
+	"github.com/jayantamadhav/ticket-service/internal/middleware"
+	"github.com/jayantamadhav/ticket-service/internal/store"
 )
 
 func main() {
@@ -28,20 +31,19 @@ func main() {
 	}
 	defer pool.Close()
 
+	st := store.New(pool)
+	showHandler := handlers.NewShowHandler(st)
+
 	r := chi.NewRouter()
 
-	// Liveness: is the process up at all? No dependency checks.
 	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 	})
 
-	// Readiness: is the process able to actually serve traffic right now?
-	// Fails closed if the DB isn't reachable.
 	r.Get("/readyz", func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 		defer cancel()
-
 		if err := pool.Ping(ctx); err != nil {
 			logger.Error("readiness check failed", "error", err)
 			w.WriteHeader(http.StatusServiceUnavailable)
@@ -50,6 +52,14 @@ func main() {
 		}
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]string{"status": "ready"})
+	})
+
+	r.Post("/shows", showHandler.Create)
+	r.Get("/shows/{id}", showHandler.Get)
+
+	r.Group(func(r chi.Router) {
+		r.Use(middleware.RequireAuth)
+		r.Post("/shows/{id}/reserve", showHandler.Reserve)
 	})
 
 	logger.Info("server starting", "port", 8080)
