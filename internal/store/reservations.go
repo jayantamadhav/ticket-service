@@ -29,36 +29,33 @@ var (
 // honoring idempotency and the per-user limit. All-or-nothing: if any
 // requested seat isn't available (including treating expired holds as
 // available), the whole request is declined and nothing is held.
-func (s *Store) Reserve(ctx context.Context, showID, userID, idempotencyKey string, seatLabels []string) (*models.Reservation, error) {
+func (s *Store) Reserve(ctx context.Context, showID, userID, idempotencyKey string, seatLabels []string) (*models.Reservation, bool, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("begin tx: %w", err)
+		return nil, false, fmt.Errorf("begin tx: %w", err)
 	}
 	defer tx.Rollback(ctx)
 
 	existing, err := checkIdempotency(ctx, tx, userID, idempotencyKey, seatLabels)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if existing != nil {
-		return existing, nil
+		return existing, true, nil
 	}
 
 	var pricePaise int64
 	err = tx.QueryRow(ctx, `SELECT price_paise FROM shows WHERE id = $1`, showID).Scan(&pricePaise)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrShowNotFound
+		return nil, false, ErrShowNotFound
 	}
 	if err != nil {
-		return nil, fmt.Errorf("lookup show: %w", err)
+		return nil, false, fmt.Errorf("lookup show: %w", err)
 	}
 
 	sortedSeats := append([]string(nil), seatLabels...)
 	sort.Strings(sortedSeats)
 
-	// Lock candidate rows in deterministic order. A seat counts as
-	// available if status='available', OR status='held' but its TTL
-	// has already passed (lazy expiry at read time).
 	rows, err := tx.Query(ctx, `
 		SELECT seat_label, status, held_until
 		FROM seats
@@ -67,7 +64,7 @@ func (s *Store) Reserve(ctx context.Context, showID, userID, idempotencyKey stri
 		FOR UPDATE
 	`, showID, sortedSeats)
 	if err != nil {
-		return nil, fmt.Errorf("lock seats: %w", err)
+		return nil, false, fmt.Errorf("lock seats: %w", err)
 	}
 
 	type seatRow struct {
@@ -80,7 +77,7 @@ func (s *Store) Reserve(ctx context.Context, showID, userID, idempotencyKey stri
 		var heldUntil *time.Time
 		if err := rows.Scan(&label, &status, &heldUntil); err != nil {
 			rows.Close()
-			return nil, fmt.Errorf("scan seat: %w", err)
+			return nil, false, fmt.Errorf("scan seat: %w", err)
 		}
 		found[label] = seatRow{status: status, heldUntil: heldUntil}
 	}
@@ -90,24 +87,24 @@ func (s *Store) Reserve(ctx context.Context, showID, userID, idempotencyKey stri
 	for _, label := range sortedSeats {
 		row, ok := found[label]
 		if !ok {
-			return nil, ErrSeatNotFound
+			return nil, false, ErrSeatNotFound
 		}
 		isAvailable := row.status == "available"
 		isExpiredHold := row.status == "held" && row.heldUntil != nil && row.heldUntil.Before(now)
 		if !isAvailable && !isExpiredHold {
-			return nil, ErrSeatUnavailable
+			return nil, false, ErrSeatUnavailable
 		}
 	}
 
 	requestedCount := len(sortedSeats)
 	var newHeldCount int
-		_, err = tx.Exec(ctx, `
+	_, err = tx.Exec(ctx, `
 		INSERT INTO user_show_holds (show_id, user_id, held_count)
 		VALUES ($1, $2, 0)
 		ON CONFLICT (show_id, user_id) DO NOTHING
 	`, showID, userID)
 	if err != nil {
-		return nil, fmt.Errorf("ensure user_show_holds row: %w", err)
+		return nil, false, fmt.Errorf("ensure user_show_holds row: %w", err)
 	}
 
 	err = tx.QueryRow(ctx, `
@@ -117,12 +114,12 @@ func (s *Store) Reserve(ctx context.Context, showID, userID, idempotencyKey stri
 		  AND held_count + $3 <= (SELECT per_user_limit FROM shows WHERE id = $1)
 		RETURNING held_count
 	`, showID, userID, requestedCount).Scan(&newHeldCount)
-	
+
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrPerUserLimitExceeded
+		return nil, false, ErrPerUserLimitExceeded
 	}
 	if err != nil {
-		return nil, fmt.Errorf("update user_show_holds: %w", err)
+		return nil, false, fmt.Errorf("update user_show_holds: %w", err)
 	}
 
 	amountPaise := pricePaise * int64(requestedCount)
@@ -138,7 +135,7 @@ func (s *Store) Reserve(ctx context.Context, showID, userID, idempotencyKey stri
 		&reservation.Seats, &reservation.AmountPaise, &reservation.Status, &reservation.CreatedAt,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("insert reservation: %w", err)
+		return nil, false, fmt.Errorf("insert reservation: %w", err)
 	}
 
 	_, err = tx.Exec(ctx, `
@@ -147,14 +144,14 @@ func (s *Store) Reserve(ctx context.Context, showID, userID, idempotencyKey stri
 		WHERE show_id = $4 AND seat_label = ANY($5)
 	`, reservation.ID, userID, heldUntil, showID, sortedSeats)
 	if err != nil {
-		return nil, fmt.Errorf("hold seats: %w", err)
+		return nil, false, fmt.Errorf("hold seats: %w", err)
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("commit tx: %w", err)
+		return nil, false, fmt.Errorf("commit tx: %w", err)
 	}
 
-	return &reservation, nil
+	return &reservation, false, nil
 }
 
 func checkIdempotency(ctx context.Context, tx pgx.Tx, userID, idempotencyKey string, requestedSeats []string) (*models.Reservation, error) {

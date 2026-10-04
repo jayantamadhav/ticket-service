@@ -2,9 +2,11 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jayantamadhav/ticket-service/internal/metrics"
 	"github.com/jayantamadhav/ticket-service/internal/middleware"
 	"github.com/jayantamadhav/ticket-service/internal/store"
 )
@@ -83,12 +85,23 @@ func (h *ShowHandler) Reserve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	reservation, err := h.store.Reserve(r.Context(), showID, userID, req.IdempotencyKey, req.Seats)
+	reservation, isReplay, err := h.store.Reserve(r.Context(), showID, userID, req.IdempotencyKey, req.Seats)
 	if err != nil {
 		switch {
-		case isDecline(err):
+		case errors.Is(err, store.ErrSeatUnavailable):
+			metrics.ReservationsDeclined.WithLabelValues(metrics.ReasonSeatTaken).Inc()
 			writeError(w, http.StatusConflict, err.Error())
-		case isNotFound(err):
+		case errors.Is(err, store.ErrPerUserLimitExceeded):
+			metrics.ReservationsDeclined.WithLabelValues(metrics.ReasonPerUserLimit).Inc()
+			writeError(w, http.StatusConflict, err.Error())
+		case errors.Is(err, store.ErrIdempotencyConflict):
+			metrics.ReservationsDeclined.WithLabelValues(metrics.ReasonIdempotentReplay).Inc()
+			writeError(w, http.StatusConflict, err.Error())
+		case errors.Is(err, store.ErrSeatNotFound):
+			metrics.ReservationsDeclined.WithLabelValues(metrics.ReasonSeatNotFound).Inc()
+			writeError(w, http.StatusNotFound, err.Error())
+		case errors.Is(err, store.ErrShowNotFound):
+			metrics.ReservationsDeclined.WithLabelValues(metrics.ReasonShowNotFound).Inc()
 			writeError(w, http.StatusNotFound, err.Error())
 		default:
 			writeError(w, http.StatusInternalServerError, "internal error")
@@ -96,8 +109,13 @@ func (h *ShowHandler) Reserve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	status := http.StatusCreated
-	writeJSON(w, status, reservation)
+	if isReplay {
+		metrics.ReservationsDeclined.WithLabelValues(metrics.ReasonIdempotentReplay).Inc()
+	} else {
+		metrics.ReservationsConfirmed.Add(float64(len(reservation.Seats)))
+	}
+
+	writeJSON(w, http.StatusCreated, reservation)
 }
 
 func (h *ShowHandler) Get(w http.ResponseWriter, r *http.Request) {

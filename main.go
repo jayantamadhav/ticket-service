@@ -13,6 +13,7 @@ import (
 	"github.com/jayantamadhav/ticket-service/internal/handlers"
 	"github.com/jayantamadhav/ticket-service/internal/middleware"
 	"github.com/jayantamadhav/ticket-service/internal/store"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func main() {
@@ -37,6 +38,7 @@ func main() {
 
 	r := chi.NewRouter()
 
+	r.Handle("/metrics", promhttp.Handler())
 	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
