@@ -20,6 +20,7 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -31,6 +32,7 @@ type outcome struct {
 	status5xx    int64
 	other        int64 // transport-level failure: no HTTP response was ever received
 	otherSamples []string
+	completed    int64 // total requests that got any outcome (confirmed+declined+5xx+other)
 	mu           sync.Mutex
 }
 
@@ -44,6 +46,7 @@ func newOutcome() *outcome {
 // so a burst run doesn't silently hide *why* requests never completed.
 func (o *outcome) recordOther(err error) {
 	atomic.AddInt64(&o.other, 1)
+	atomic.AddInt64(&o.completed, 1)
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	if len(o.otherSamples) < 10 {
@@ -111,8 +114,33 @@ func main() {
 	hotSeat := seatLabels[0]
 	restOfHall := seatLabels[1:]
 
+	totalRequests := *hotSeatStormers + *spreadUsers + 50 + *retryStormers*5
+
 	o := newOutcome()
 	var wg sync.WaitGroup
+
+	// Prints a progress line every second, overwritten in place (\r, no
+	// newline), so a long-running burst (especially against a real
+	// deployment with network latency, not localhost) doesn't look hung
+	// between the "firing..." lines and the final summary without spamming
+	// the terminal with one line per tick.
+	progressDone := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(1 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				done := atomic.LoadInt64(&o.completed)
+				fmt.Printf("\r  ... %d/%d requests completed (confirmed=%d, 5xx=%d, other=%d)   ",
+					done, totalRequests, atomic.LoadInt64(&o.confirmed),
+					atomic.LoadInt64(&o.status5xx), atomic.LoadInt64(&o.other))
+			case <-progressDone:
+				fmt.Print("\r" + strings.Repeat(" ", 80) + "\r") // clear the progress line
+				return
+			}
+		}
+	}()
 
 	// Bounds how many requests are in flight at once for the bulk load
 	// below, so a 20k-request burst doesn't need 20k simultaneous OS
@@ -187,6 +215,9 @@ func main() {
 	}
 
 	wg.Wait()
+	close(progressDone)
+
+	fmt.Printf("\nall %d requests completed.\n", atomic.LoadInt64(&o.completed))
 
 	fmt.Println("\n== outcome distribution ==")
 	fmt.Printf("confirmed:  %d\n", atomic.LoadInt64(&o.confirmed))
@@ -314,8 +345,10 @@ func reserve(client *http.Client, baseURL, showID, userID, idempotencyKey string
 	switch {
 	case resp.StatusCode == http.StatusCreated:
 		atomic.AddInt64(&o.confirmed, 1)
+		atomic.AddInt64(&o.completed, 1)
 	case resp.StatusCode >= 500:
 		atomic.AddInt64(&o.status5xx, 1)
+		atomic.AddInt64(&o.completed, 1)
 	case resp.StatusCode >= 400:
 		var er errorResponse
 		reason := fmt.Sprintf("http_%d", resp.StatusCode)
@@ -323,6 +356,7 @@ func reserve(client *http.Client, baseURL, showID, userID, idempotencyKey string
 			reason = er.Error
 		}
 		atomic.AddInt64(o.declinedCounter(reason), 1)
+		atomic.AddInt64(&o.completed, 1)
 	default:
 		o.recordOther(fmt.Errorf("unexpected status %d", resp.StatusCode))
 	}

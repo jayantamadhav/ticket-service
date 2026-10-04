@@ -3,7 +3,7 @@
 #
 # Usage:
 #   ./burst.sh [BASE_URL]
-#   ./burst.sh https://my-deploy.example.com
+#   ./burst.sh https://paytm-assignment.work.gd
 #
 # Defaults to http://localhost:8080 if no URL is given.
 set -euo pipefail

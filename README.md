@@ -4,6 +4,9 @@ JSON HTTP API for selling assigned seats to a show. No seat is ever
 double-sold, no user exceeds their per-show seat limit, and retried requests
 never double-charge.
 
+**Live URL**: https://paytm-assignment.work.gd
+(`/healthz`, `/readyz`, `/metrics` all served from there)
+
 See [WRITEUP.md](WRITEUP.md) for design rationale.
 
 ## Stack
@@ -72,8 +75,8 @@ Authorization: Bearer alice
 ## Load testing
 
 ```bash
-./burst.sh                              # against http://localhost:8080
-./burst.sh https://your-deploy.example
+./burst.sh                                        # against http://localhost:8080
+./burst.sh https://paytm-assignment.work.gd       # against the live deployment
 ```
 
 `cmd/burst` creates a fresh show and fires a concurrent stampede at it: a
@@ -83,10 +86,11 @@ the hot seat resolved to exactly one winner, and reconciles
 `available + held + confirmed == total`. Exits non-zero on any 5xx or
 reconciliation failure.
 
-To approximate the spec's ~20,000-concurrent-reservation stampede:
+To approximate the spec's ~20,000-concurrent-reservation stampede against the
+live deployment:
 
 ```bash
-go run ./cmd/burst -base-url http://localhost:8080 \
+go run ./cmd/burst -base-url https://paytm-assignment.work.gd \
   -seats 1000 -hot-seat-users 500 -spread-users 19200 -retry-users 50
 ```
 
@@ -110,5 +114,6 @@ test and an all-or-nothing partial-request test.
 
 ## Known gaps
 
-- Migrations aren't applied automatically on startup.
-- No live deployment URL yet.
+- Migrations aren't applied automatically on startup — run manually once
+  against the target database (see above).
+- `POST /shows` isn't gated behind an admin credential yet.
