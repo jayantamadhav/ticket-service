@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jayantamadhav/ticket-service/internal/logging"
 	"github.com/jayantamadhav/ticket-service/internal/middleware"
 	"github.com/jayantamadhav/ticket-service/internal/store"
 )
@@ -25,12 +26,18 @@ func (h *ReservationHandler) Confirm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	log := logging.FromContext(r.Context()).With("reservation_id", reservationID, "user_id", userID)
+
 	reservation, err := h.store.Confirm(r.Context(), reservationID, userID)
 	if err != nil {
+		log.Info("confirm failed", "error", err)
 		writeReservationError(w, err)
 		return
 	}
 
+	log.Info("reservation confirmed")
+	// Confirm only moves seats between held and confirmed, so it doesn't
+	// change the available count — no metric refresh needed here.
 	writeJSON(w, http.StatusOK, reservation)
 }
 
@@ -43,12 +50,17 @@ func (h *ReservationHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := h.store.Cancel(r.Context(), reservationID, userID)
+	log := logging.FromContext(r.Context()).With("reservation_id", reservationID, "user_id", userID)
+
+	showID, err := h.store.Cancel(r.Context(), reservationID, userID)
 	if err != nil {
+		log.Info("cancel failed", "error", err)
 		writeReservationError(w, err)
 		return
 	}
 
+	log.Info("reservation cancelled")
+	refreshSeatsAvailableMetric(r.Context(), h.store, showID)
 	writeJSON(w, http.StatusOK, map[string]string{"status": "cancelled"})
 }
 

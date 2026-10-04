@@ -117,3 +117,20 @@ func (s *Store) GetShowState(ctx context.Context, showID string) (*ShowState, er
 
 	return state, nil
 }
+
+// AvailableSeats returns the current count of available seats for a show,
+// applying the same lazy hold-expiry rule as GetShowState. Used to keep the
+// seats_available metric current without callers having to pull the full
+// per-seat breakdown.
+func (s *Store) AvailableSeats(ctx context.Context, showID string) (int, error) {
+	var count int
+	err := s.pool.QueryRow(ctx, `
+		SELECT count(*) FROM seats
+		WHERE show_id = $1
+		  AND (status = 'available' OR (status = 'held' AND held_until < now()))
+	`, showID).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("count available seats: %w", err)
+	}
+	return count, nil
+}

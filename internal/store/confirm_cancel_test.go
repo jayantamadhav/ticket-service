@@ -14,7 +14,7 @@ func TestConfirm_HappyPath(t *testing.T) {
 	s := store.New(pool)
 	show := testutil.CreateTestShow(t, s, []string{"A1"}, 4)
 
-	res, err := s.Reserve(context.Background(), show.ID, "alice", "key-1", []string{"A1"})
+	res, _, err := s.Reserve(context.Background(), show.ID, "alice", "key-1", []string{"A1"})
 	if err != nil {
 		t.Fatalf("Reserve failed: %v", err)
 	}
@@ -41,7 +41,7 @@ func TestConfirm_NotOwner(t *testing.T) {
 	s := store.New(pool)
 	show := testutil.CreateTestShow(t, s, []string{"A1"}, 4)
 
-	res, err := s.Reserve(context.Background(), show.ID, "alice", "key-1", []string{"A1"})
+	res, _, err := s.Reserve(context.Background(), show.ID, "alice", "key-1", []string{"A1"})
 	if err != nil {
 		t.Fatalf("Reserve failed: %v", err)
 	}
@@ -57,7 +57,7 @@ func TestConfirm_AlreadyFinalized(t *testing.T) {
 	s := store.New(pool)
 	show := testutil.CreateTestShow(t, s, []string{"A1"}, 4)
 
-	res, err := s.Reserve(context.Background(), show.ID, "alice", "key-1", []string{"A1"})
+	res, _, err := s.Reserve(context.Background(), show.ID, "alice", "key-1", []string{"A1"})
 	if err != nil {
 		t.Fatalf("Reserve failed: %v", err)
 	}
@@ -86,12 +86,12 @@ func TestCancel_HeldReservation(t *testing.T) {
 	s := store.New(pool)
 	show := testutil.CreateTestShow(t, s, []string{"A1"}, 4)
 
-	res, err := s.Reserve(context.Background(), show.ID, "alice", "key-1", []string{"A1"})
+	res, _, err := s.Reserve(context.Background(), show.ID, "alice", "key-1", []string{"A1"})
 	if err != nil {
 		t.Fatalf("Reserve failed: %v", err)
 	}
 
-	if err := s.Cancel(context.Background(), res.ID, "alice"); err != nil {
+	if _, err := s.Cancel(context.Background(), res.ID, "alice"); err != nil {
 		t.Fatalf("Cancel failed: %v", err)
 	}
 
@@ -109,7 +109,7 @@ func TestCancel_ConfirmedReservation(t *testing.T) {
 	s := store.New(pool)
 	show := testutil.CreateTestShow(t, s, []string{"A1"}, 4)
 
-	res, err := s.Reserve(context.Background(), show.ID, "alice", "key-1", []string{"A1"})
+	res, _, err := s.Reserve(context.Background(), show.ID, "alice", "key-1", []string{"A1"})
 	if err != nil {
 		t.Fatalf("Reserve failed: %v", err)
 	}
@@ -117,7 +117,7 @@ func TestCancel_ConfirmedReservation(t *testing.T) {
 		t.Fatalf("Confirm failed: %v", err)
 	}
 
-	if err := s.Cancel(context.Background(), res.ID, "alice"); err != nil {
+	if _, err := s.Cancel(context.Background(), res.ID, "alice"); err != nil {
 		t.Fatalf("Cancel of confirmed reservation failed: %v", err)
 	}
 
@@ -135,12 +135,12 @@ func TestCancel_NotOwner(t *testing.T) {
 	s := store.New(pool)
 	show := testutil.CreateTestShow(t, s, []string{"A1"}, 4)
 
-	res, err := s.Reserve(context.Background(), show.ID, "alice", "key-1", []string{"A1"})
+	res, _, err := s.Reserve(context.Background(), show.ID, "alice", "key-1", []string{"A1"})
 	if err != nil {
 		t.Fatalf("Reserve failed: %v", err)
 	}
 
-	err = s.Cancel(context.Background(), res.ID, "bob")
+	_, err = s.Cancel(context.Background(), res.ID, "bob")
 	if !errors.Is(err, store.ErrNotOwner) {
 		t.Errorf("expected ErrNotOwner, got %v", err)
 	}
@@ -160,16 +160,16 @@ func TestCancel_SeatRebookableAfterRelease(t *testing.T) {
 	s := store.New(pool)
 	show := testutil.CreateTestShow(t, s, []string{"A1"}, 4)
 
-	res, err := s.Reserve(context.Background(), show.ID, "alice", "key-1", []string{"A1"})
+	res, _, err := s.Reserve(context.Background(), show.ID, "alice", "key-1", []string{"A1"})
 	if err != nil {
 		t.Fatalf("Reserve failed: %v", err)
 	}
-	if err := s.Cancel(context.Background(), res.ID, "alice"); err != nil {
+	if _, err := s.Cancel(context.Background(), res.ID, "alice"); err != nil {
 		t.Fatalf("Cancel failed: %v", err)
 	}
 
 	// bob should now be able to claim the released seat
-	_, err = s.Reserve(context.Background(), show.ID, "bob", "key-bob-1", []string{"A1"})
+	_, _, err = s.Reserve(context.Background(), show.ID, "bob", "key-bob-1", []string{"A1"})
 	if err != nil {
 		t.Errorf("expected bob to successfully claim released seat, got error: %v", err)
 	}

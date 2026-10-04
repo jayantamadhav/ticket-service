@@ -9,4 +9,4 @@ Used claude in this order, one by one. Not a single plan and execute prompt for 
 3. Used Claude to write handlers
 4. Used Claude to write unit test cases for the apis
 5. Used Claude to wire up prometheus
-6. 
+6. Used Claude to write the burst script.

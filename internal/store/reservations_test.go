@@ -15,9 +15,12 @@ func TestReserve_HappyPath(t *testing.T) {
 	s := store.New(pool)
 	show := testutil.CreateTestShow(t, s, []string{"A1", "A2"}, 4)
 
-	res, err := s.Reserve(context.Background(), show.ID, "alice", "key-1", []string{"A1"})
+	res, isReplay, err := s.Reserve(context.Background(), show.ID, "alice", "key-1", []string{"A1"})
 	if err != nil {
 		t.Fatalf("Reserve failed: %v", err)
+	}
+	if isReplay {
+		t.Error("expected isReplay=false for a brand new reservation")
 	}
 	if res.Status != "held" {
 		t.Errorf("expected status 'held', got %q", res.Status)
@@ -38,14 +41,20 @@ func TestReserve_IdempotentRetry(t *testing.T) {
 	s := store.New(pool)
 	show := testutil.CreateTestShow(t, s, []string{"A1"}, 4)
 
-	first, err := s.Reserve(context.Background(), show.ID, "alice", "key-1", []string{"A1"})
+	first, isReplay, err := s.Reserve(context.Background(), show.ID, "alice", "key-1", []string{"A1"})
 	if err != nil {
 		t.Fatalf("first Reserve failed: %v", err)
 	}
+	if isReplay {
+		t.Error("expected isReplay=false for the first request with this key")
+	}
 
-	second, err := s.Reserve(context.Background(), show.ID, "alice", "key-1", []string{"A1"})
+	second, isReplay, err := s.Reserve(context.Background(), show.ID, "alice", "key-1", []string{"A1"})
 	if err != nil {
 		t.Fatalf("retry Reserve failed: %v", err)
+	}
+	if !isReplay {
+		t.Error("expected isReplay=true when retrying the same idempotency key")
 	}
 
 	if first.ID != second.ID {
@@ -58,12 +67,12 @@ func TestReserve_IdempotencyConflict(t *testing.T) {
 	s := store.New(pool)
 	show := testutil.CreateTestShow(t, s, []string{"A1", "A2"}, 4)
 
-	_, err := s.Reserve(context.Background(), show.ID, "alice", "key-1", []string{"A1"})
+	_, _, err := s.Reserve(context.Background(), show.ID, "alice", "key-1", []string{"A1"})
 	if err != nil {
 		t.Fatalf("first Reserve failed: %v", err)
 	}
 
-	_, err = s.Reserve(context.Background(), show.ID, "alice", "key-1", []string{"A2"})
+	_, _, err = s.Reserve(context.Background(), show.ID, "alice", "key-1", []string{"A2"})
 	if !errors.Is(err, store.ErrIdempotencyConflict) {
 		t.Errorf("expected ErrIdempotencyConflict, got %v", err)
 	}
@@ -74,12 +83,12 @@ func TestReserve_SeatAlreadyHeld(t *testing.T) {
 	s := store.New(pool)
 	show := testutil.CreateTestShow(t, s, []string{"A1"}, 4)
 
-	_, err := s.Reserve(context.Background(), show.ID, "alice", "key-1", []string{"A1"})
+	_, _, err := s.Reserve(context.Background(), show.ID, "alice", "key-1", []string{"A1"})
 	if err != nil {
 		t.Fatalf("alice's Reserve failed: %v", err)
 	}
 
-	_, err = s.Reserve(context.Background(), show.ID, "bob", "key-2", []string{"A1"})
+	_, _, err = s.Reserve(context.Background(), show.ID, "bob", "key-2", []string{"A1"})
 	if !errors.Is(err, store.ErrSeatUnavailable) {
 		t.Errorf("expected ErrSeatUnavailable, got %v", err)
 	}
@@ -90,7 +99,7 @@ func TestReserve_SeatNotFound(t *testing.T) {
 	s := store.New(pool)
 	show := testutil.CreateTestShow(t, s, []string{"A1"}, 4)
 
-	_, err := s.Reserve(context.Background(), show.ID, "alice", "key-1", []string{"Z99"})
+	_, _, err := s.Reserve(context.Background(), show.ID, "alice", "key-1", []string{"Z99"})
 	if !errors.Is(err, store.ErrSeatNotFound) {
 		t.Errorf("expected ErrSeatNotFound, got %v", err)
 	}
@@ -101,13 +110,13 @@ func TestReserve_PartialRequestAllOrNothing(t *testing.T) {
 	s := store.New(pool)
 	show := testutil.CreateTestShow(t, s, []string{"A1", "A2"}, 4)
 
-	_, err := s.Reserve(context.Background(), show.ID, "alice", "key-1", []string{"A1"})
+	_, _, err := s.Reserve(context.Background(), show.ID, "alice", "key-1", []string{"A1"})
 	if err != nil {
 		t.Fatalf("alice's Reserve failed: %v", err)
 	}
 
 	// bob wants A1 (taken) and A2 (free) — should decline the whole request
-	_, err = s.Reserve(context.Background(), show.ID, "bob", "key-2", []string{"A1", "A2"})
+	_, _, err = s.Reserve(context.Background(), show.ID, "bob", "key-2", []string{"A1", "A2"})
 	if !errors.Is(err, store.ErrSeatUnavailable) {
 		t.Errorf("expected ErrSeatUnavailable (all-or-nothing decline), got %v", err)
 	}
@@ -135,7 +144,7 @@ func TestReserve_PerUserLimitEnforced_FirstRequestExceedsLimit(t *testing.T) {
 	show := testutil.CreateTestShow(t, s, []string{"A1", "A2", "A3", "A4", "A5"}, 4)
 
 	// alice's FIRST EVER request for this show asks for 5 seats against a limit of 4
-	_, err := s.Reserve(context.Background(), show.ID, "alice", "key-1",
+	_, _, err := s.Reserve(context.Background(), show.ID, "alice", "key-1",
 		[]string{"A1", "A2", "A3", "A4", "A5"})
 	if !errors.Is(err, store.ErrPerUserLimitExceeded) {
 		t.Errorf("expected ErrPerUserLimitExceeded on first over-limit request, got %v", err)
@@ -168,7 +177,7 @@ func TestReserve_HotSeatContention(t *testing.T) {
 			defer wg.Done()
 			userID := "user-" + string(rune('A'+n%26)) + string(rune('0'+n/26))
 			idemKey := "key-" + userID
-			_, err := s.Reserve(context.Background(), show.ID, userID, idemKey, []string{"A1"})
+			_, _, err := s.Reserve(context.Background(), show.ID, userID, idemKey, []string{"A1"})
 			results <- err
 		}(i)
 	}
@@ -214,13 +223,13 @@ func TestReserve_PerUserLimitEnforced(t *testing.T) {
 	show := testutil.CreateTestShow(t, s, []string{"A1", "A2", "A3", "A4", "A5"}, 4)
 
 	for i, seat := range []string{"A1", "A2", "A3", "A4"} {
-		_, err := s.Reserve(context.Background(), show.ID, "alice", "key-"+seat, []string{seat})
+		_, _, err := s.Reserve(context.Background(), show.ID, "alice", "key-"+seat, []string{seat})
 		if err != nil {
 			t.Fatalf("Reserve %d (%s) failed: %v", i, seat, err)
 		}
 	}
 
-	_, err := s.Reserve(context.Background(), show.ID, "alice", "key-A5", []string{"A5"})
+	_, _, err := s.Reserve(context.Background(), show.ID, "alice", "key-A5", []string{"A5"})
 	if !errors.Is(err, store.ErrPerUserLimitExceeded) {
 		t.Errorf("expected ErrPerUserLimitExceeded, got %v", err)
 	}
@@ -235,12 +244,12 @@ func TestReserve_IdempotencyKeyScopedPerUser(t *testing.T) {
 	s := store.New(pool)
 	show := testutil.CreateTestShow(t, s, []string{"A1", "A2"}, 4)
 
-	aliceRes, err := s.Reserve(context.Background(), show.ID, "alice", "shared-key", []string{"A1"})
+	aliceRes, _, err := s.Reserve(context.Background(), show.ID, "alice", "shared-key", []string{"A1"})
 	if err != nil {
 		t.Fatalf("alice's Reserve failed: %v", err)
 	}
 
-	bobRes, err := s.Reserve(context.Background(), show.ID, "bob", "shared-key", []string{"A2"})
+	bobRes, _, err := s.Reserve(context.Background(), show.ID, "bob", "shared-key", []string{"A2"})
 	if err != nil {
 		t.Fatalf("bob's Reserve failed: %v", err)
 	}

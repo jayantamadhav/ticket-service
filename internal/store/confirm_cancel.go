@@ -76,35 +76,37 @@ func (s *Store) Confirm(ctx context.Context, reservationID, userID string) (*mod
 
 // Cancel releases a held OR confirmed reservation's seats back to available,
 // only if the caller owns it. Decrements the user's held_count accordingly.
-func (s *Store) Cancel(ctx context.Context, reservationID, userID string) error {
+// Returns the show ID so callers can refresh show-scoped state (e.g. metrics)
+// without a second lookup.
+func (s *Store) Cancel(ctx context.Context, reservationID, userID string) (showID string, err error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("begin tx: %w", err)
+		return "", fmt.Errorf("begin tx: %w", err)
 	}
 	defer tx.Rollback(ctx)
 
-	var dbUserID, showID, status string
+	var dbUserID, status string
 	var seats []string
 	err = tx.QueryRow(ctx, `
 		SELECT user_id, show_id, status, seats FROM reservations WHERE id = $1 FOR UPDATE
 	`, reservationID).Scan(&dbUserID, &showID, &status, &seats)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return ErrReservationNotFound
+		return "", ErrReservationNotFound
 	}
 	if err != nil {
-		return fmt.Errorf("lookup reservation: %w", err)
+		return "", fmt.Errorf("lookup reservation: %w", err)
 	}
 
 	if dbUserID != userID {
-		return ErrNotOwner
+		return "", ErrNotOwner
 	}
 	if status == "cancelled" {
-		return ErrAlreadyFinalized
+		return "", ErrAlreadyFinalized
 	}
 
 	_, err = tx.Exec(ctx, `UPDATE reservations SET status = 'cancelled' WHERE id = $1`, reservationID)
 	if err != nil {
-		return fmt.Errorf("cancel reservation: %w", err)
+		return "", fmt.Errorf("cancel reservation: %w", err)
 	}
 
 	// Only release seats that still point at THIS reservation — guards
@@ -115,7 +117,7 @@ func (s *Store) Cancel(ctx context.Context, reservationID, userID string) error 
 		WHERE reservation_id = $1
 	`, reservationID)
 	if err != nil {
-		return fmt.Errorf("release seats: %w", err)
+		return "", fmt.Errorf("release seats: %w", err)
 	}
 
 	_, err = tx.Exec(ctx, `
@@ -124,8 +126,11 @@ func (s *Store) Cancel(ctx context.Context, reservationID, userID string) error 
 		WHERE show_id = $2 AND user_id = $3
 	`, len(seats), showID, dbUserID)
 	if err != nil {
-		return fmt.Errorf("update user_show_holds: %w", err)
+		return "", fmt.Errorf("update user_show_holds: %w", err)
 	}
 
-	return tx.Commit(ctx)
+	if err := tx.Commit(ctx); err != nil {
+		return "", fmt.Errorf("commit tx: %w", err)
+	}
+	return showID, nil
 }
