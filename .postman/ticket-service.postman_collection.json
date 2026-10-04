@@ -8,7 +8,24 @@
   },
   "item": [
     {
-      "name": "healthz",
+      "name": "Metrics",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/metrics",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "metrics"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Health Copy",
       "request": {
         "method": "GET",
         "header": [],
@@ -25,7 +42,7 @@
       "response": []
     },
     {
-      "name": "readyz",
+      "name": "Ready",
       "request": {
         "method": "GET",
         "header": [],
@@ -40,6 +57,517 @@
         }
       },
       "response": []
+    },
+    {
+      "name": "Get Show",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/shows/5c5380a3-f63c-4c5a-8335-8d2bfe1a0a6c",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "shows",
+            "5c5380a3-f63c-4c5a-8335-8d2bfe1a0a6c"
+          ]
+        }
+      },
+      "response": [
+        {
+          "name": "success",
+          "originalRequest": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/shows/5c5380a3-f63c-4c5a-8335-8d2bfe1a0a6c",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "shows",
+                "5c5380a3-f63c-4c5a-8335-8d2bfe1a0a6c"
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [
+            {
+              "key": "content-type",
+              "value": "application/json"
+            },
+            {
+              "key": "date",
+              "value": "Fri, 02 Oct 2026 07:10:31 GMT"
+            },
+            {
+              "key": "content-length",
+              "value": "504"
+            }
+          ],
+          "cookie": [],
+          "body": "{\n  \"show_id\": \"5c5380a3-f63c-4c5a-8335-8d2bfe1a0a6c\",\n  \"name\": \"friday-night\",\n  \"seats\": [\n    {\n      \"label\": \"A1\",\n      \"status\": \"available\"\n    },\n    {\n      \"label\": \"A10\",\n      \"status\": \"available\"\n    },\n    {\n      \"label\": \"A2\",\n      \"status\": \"available\"\n    },\n    {\n      \"label\": \"A3\",\n      \"status\": \"available\"\n    },\n    {\n      \"label\": \"A4\",\n      \"status\": \"available\"\n    },\n    {\n      \"label\": \"A5\",\n      \"status\": \"available\"\n    },\n    {\n      \"label\": \"A6\",\n      \"status\": \"available\"\n    },\n    {\n      \"label\": \"A7\",\n      \"status\": \"available\"\n    },\n    {\n      \"label\": \"A8\",\n      \"status\": \"available\"\n    },\n    {\n      \"label\": \"A9\",\n      \"status\": \"available\"\n    }\n  ],\n  \"counts\": {\n    \"available\": 10,\n    \"held\": 0,\n    \"confirmed\": 0,\n    \"total\": 10\n  }\n}"
+        }
+      ]
+    },
+    {
+      "name": "Create Show",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"name\": \"friday-night\",\n    \"seats\": [\n        \"A1\",\n        \"A2\",\n        \"A3\",\n        \"A4\",\n        \"A5\",\n        \"A6\",\n        \"A7\",\n        \"A8\",\n        \"A9\",\n        \"A10\"\n    ],\n    \"price_paise\": 25000\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/shows",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "shows"
+          ]
+        }
+      },
+      "response": [
+        {
+          "name": "success",
+          "originalRequest": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"friday-night\",\n    \"seats\": [\n        \"A1\",\n        \"A2\",\n        \"A3\",\n        \"A4\",\n        \"A5\",\n        \"A6\",\n        \"A7\",\n        \"A8\",\n        \"A9\",\n        \"A10\"\n    ],\n    \"price_paise\": 25000\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/shows",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "shows"
+              ]
+            }
+          },
+          "status": "Created",
+          "code": 201,
+          "_postman_previewlanguage": "json",
+          "header": [
+            {
+              "key": "content-type",
+              "value": "application/json"
+            },
+            {
+              "key": "date",
+              "value": "Fri, 02 Oct 2026 07:10:09 GMT"
+            },
+            {
+              "key": "content-length",
+              "value": "1501"
+            }
+          ],
+          "cookie": [],
+          "body": "{\n  \"created_at\": \"2026-10-02T07:10:09.235101Z\",\n  \"id\": \"5c5380a3-f63c-4c5a-8335-8d2bfe1a0a6c\",\n  \"name\": \"friday-night\",\n  \"per_user_limit\": 4,\n  \"price_paise\": 25000,\n  \"seats\": [\n    {\n      \"id\": \"9b6885bc-386c-4fa3-934a-0fa1ce5a63fc\",\n      \"show_id\": \"5c5380a3-f63c-4c5a-8335-8d2bfe1a0a6c\",\n      \"seat_label\": \"A1\",\n      \"status\": \"available\"\n    },\n    {\n      \"id\": \"0d5dd3c9-a738-4b89-b8b4-108a8fbd7098\",\n      \"show_id\": \"5c5380a3-f63c-4c5a-8335-8d2bfe1a0a6c\",\n      \"seat_label\": \"A2\",\n      \"status\": \"available\"\n    },\n    {\n      \"id\": \"1cf35d4f-20ed-481c-9c9c-2a1d111900fc\",\n      \"show_id\": \"5c5380a3-f63c-4c5a-8335-8d2bfe1a0a6c\",\n      \"seat_label\": \"A3\",\n      \"status\": \"available\"\n    },\n    {\n      \"id\": \"e5cf7674-206d-4337-90f4-8a54774049fb\",\n      \"show_id\": \"5c5380a3-f63c-4c5a-8335-8d2bfe1a0a6c\",\n      \"seat_label\": \"A4\",\n      \"status\": \"available\"\n    },\n    {\n      \"id\": \"cf64e2a5-8a70-4691-800d-858cd83225fe\",\n      \"show_id\": \"5c5380a3-f63c-4c5a-8335-8d2bfe1a0a6c\",\n      \"seat_label\": \"A5\",\n      \"status\": \"available\"\n    },\n    {\n      \"id\": \"1b8f1203-c8c4-48e4-93d9-fb8a621f2453\",\n      \"show_id\": \"5c5380a3-f63c-4c5a-8335-8d2bfe1a0a6c\",\n      \"seat_label\": \"A6\",\n      \"status\": \"available\"\n    },\n    {\n      \"id\": \"87b10f94-5987-4c9a-b824-40a80439a53f\",\n      \"show_id\": \"5c5380a3-f63c-4c5a-8335-8d2bfe1a0a6c\",\n      \"seat_label\": \"A7\",\n      \"status\": \"available\"\n    },\n    {\n      \"id\": \"f46ef478-5c28-4a18-9c38-856a613d3e72\",\n      \"show_id\": \"5c5380a3-f63c-4c5a-8335-8d2bfe1a0a6c\",\n      \"seat_label\": \"A8\",\n      \"status\": \"available\"\n    },\n    {\n      \"id\": \"3691a202-1812-4848-8077-66f631c35457\",\n      \"show_id\": \"5c5380a3-f63c-4c5a-8335-8d2bfe1a0a6c\",\n      \"seat_label\": \"A9\",\n      \"status\": \"available\"\n    },\n    {\n      \"id\": \"f0e74832-ae4a-4f20-8968-1ccfcd6825a4\",\n      \"show_id\": \"5c5380a3-f63c-4c5a-8335-8d2bfe1a0a6c\",\n      \"seat_label\": \"A10\",\n      \"status\": \"available\"\n    }\n  ]\n}"
+        }
+      ]
+    },
+    {
+      "name": "Reserve Seat",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer alice"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"seats\": [\n        \"A1\",\n        \"A2\",\n        \"A3\",\n        \"A4\",\n        \"A5\"\n    ],\n    \"idempotency_key\": \"key-1\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/shows/54286338-326c-4d81-9850-18f30138de04/reserve",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "shows",
+            "54286338-326c-4d81-9850-18f30138de04",
+            "reserve"
+          ]
+        }
+      },
+      "response": [
+        {
+          "name": "per-user-limit-exceed",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer bob"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"seats\": [\n        \"A1\",\n        \"A2\",\n        \"A3\",\n        \"A4\",\n        \"A5\"\n    ],\n    \"idempotency_key\": \"key-1\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/shows/5c5380a3-f63c-4c5a-8335-8d2bfe1a0a6c/reserve",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "shows",
+                "5c5380a3-f63c-4c5a-8335-8d2bfe1a0a6c",
+                "reserve"
+              ]
+            }
+          },
+          "status": "Conflict",
+          "code": 409,
+          "_postman_previewlanguage": "json",
+          "header": [
+            {
+              "key": "content-type",
+              "value": "application/json"
+            },
+            {
+              "key": "date",
+              "value": "Fri, 02 Oct 2026 07:11:06 GMT"
+            },
+            {
+              "key": "content-length",
+              "value": "36"
+            }
+          ],
+          "cookie": [],
+          "body": "{\n  \"error\": \"per-user limit exceeded\"\n}"
+        },
+        {
+          "name": "success",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer alice"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"seats\": [\n        \"A1\",\n        \"A2\",\n        \"A3\",\n        \"A4\"\n    ],\n    \"idempotency_key\": \"key-1\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/shows/5c5380a3-f63c-4c5a-8335-8d2bfe1a0a6c/reserve",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "shows",
+                "5c5380a3-f63c-4c5a-8335-8d2bfe1a0a6c",
+                "reserve"
+              ]
+            }
+          },
+          "status": "Created",
+          "code": 201,
+          "_postman_previewlanguage": "json",
+          "header": [
+            {
+              "key": "content-type",
+              "value": "application/json"
+            },
+            {
+              "key": "date",
+              "value": "Fri, 02 Oct 2026 07:11:31 GMT"
+            },
+            {
+              "key": "content-length",
+              "value": "236"
+            }
+          ],
+          "cookie": [],
+          "body": "{\n  \"reservation_id\": \"d51ca9c2-810f-47a7-8e9b-31d2da534e1e\",\n  \"show_id\": \"5c5380a3-f63c-4c5a-8335-8d2bfe1a0a6c\",\n  \"user_id\": \"alice\",\n  \"seats\": [\n    \"A1\",\n    \"A2\",\n    \"A3\",\n    \"A4\"\n  ],\n  \"amount_paise\": 100000,\n  \"status\": \"held\",\n  \"created_at\": \"2026-10-02T07:11:31.981763Z\"\n}"
+        },
+        {
+          "name": "seat-unavailable",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer bob"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"seats\": [\n        \"A1\",\n        \"A2\",\n        \"A3\",\n        \"A4\"\n    ],\n    \"idempotency_key\": \"key-1\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/shows/5c5380a3-f63c-4c5a-8335-8d2bfe1a0a6c/reserve",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "shows",
+                "5c5380a3-f63c-4c5a-8335-8d2bfe1a0a6c",
+                "reserve"
+              ]
+            }
+          },
+          "status": "Conflict",
+          "code": 409,
+          "_postman_previewlanguage": "json",
+          "header": [
+            {
+              "key": "content-type",
+              "value": "application/json"
+            },
+            {
+              "key": "date",
+              "value": "Fri, 02 Oct 2026 07:12:13 GMT"
+            },
+            {
+              "key": "content-length",
+              "value": "29"
+            }
+          ],
+          "cookie": [],
+          "body": "{\n  \"error\": \"seat unavailable\"\n}"
+        },
+        {
+          "name": "idempotency",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer alice"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"seats\": [\n        \"A1\",\n        \"A2\",\n        \"A3\",\n        \"A4\"\n    ],\n    \"idempotency_key\": \"key-1\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/shows/5c5380a3-f63c-4c5a-8335-8d2bfe1a0a6c/reserve",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "shows",
+                "5c5380a3-f63c-4c5a-8335-8d2bfe1a0a6c",
+                "reserve"
+              ]
+            }
+          },
+          "status": "Created",
+          "code": 201,
+          "_postman_previewlanguage": "json",
+          "header": [
+            {
+              "key": "content-type",
+              "value": "application/json"
+            },
+            {
+              "key": "date",
+              "value": "Fri, 02 Oct 2026 07:13:08 GMT"
+            },
+            {
+              "key": "content-length",
+              "value": "236"
+            }
+          ],
+          "cookie": [],
+          "body": "{\n  \"reservation_id\": \"d51ca9c2-810f-47a7-8e9b-31d2da534e1e\",\n  \"show_id\": \"5c5380a3-f63c-4c5a-8335-8d2bfe1a0a6c\",\n  \"user_id\": \"alice\",\n  \"seats\": [\n    \"A1\",\n    \"A2\",\n    \"A3\",\n    \"A4\"\n  ],\n  \"amount_paise\": 100000,\n  \"status\": \"held\",\n  \"created_at\": \"2026-10-02T07:11:31.981763Z\"\n}"
+        },
+        {
+          "name": "seat-not-found",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer alice"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"seats\": [\n        \"A1\",\n        \"A2\",\n        \"A3\",\n        \"Z4\"\n    ],\n    \"idempotency_key\": \"key-2\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/shows/5c5380a3-f63c-4c5a-8335-8d2bfe1a0a6c/reserve",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "shows",
+                "5c5380a3-f63c-4c5a-8335-8d2bfe1a0a6c",
+                "reserve"
+              ]
+            }
+          },
+          "status": "Not Found",
+          "code": 404,
+          "_postman_previewlanguage": "json",
+          "header": [
+            {
+              "key": "content-type",
+              "value": "application/json"
+            },
+            {
+              "key": "date",
+              "value": "Fri, 02 Oct 2026 07:13:38 GMT"
+            },
+            {
+              "key": "content-length",
+              "value": "27"
+            }
+          ],
+          "cookie": [],
+          "body": "{\n  \"error\": \"seat not found\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "Confirm Seat",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": ""
+        }
+      },
+      "response": [
+        {
+          "name": "unauthorized",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer bob"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/reservations/d51ca9c2-810f-47a7-8e9b-31d2da534e1e/confirm",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "reservations",
+                "d51ca9c2-810f-47a7-8e9b-31d2da534e1e",
+                "confirm"
+              ]
+            }
+          },
+          "status": "Forbidden",
+          "code": 403,
+          "_postman_previewlanguage": "json",
+          "header": [
+            {
+              "key": "content-type",
+              "value": "application/json"
+            },
+            {
+              "key": "date",
+              "value": "Fri, 02 Oct 2026 07:15:32 GMT"
+            },
+            {
+              "key": "content-length",
+              "value": "46"
+            }
+          ],
+          "cookie": [],
+          "body": "{\n  \"error\": \"not the owner of this reservation\"\n}"
+        },
+        {
+          "name": "hold-expired",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer alice"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/reservations/d51ca9c2-810f-47a7-8e9b-31d2da534e1e/confirm",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "reservations",
+                "d51ca9c2-810f-47a7-8e9b-31d2da534e1e",
+                "confirm"
+              ]
+            }
+          },
+          "status": "Conflict",
+          "code": 409,
+          "_postman_previewlanguage": "json",
+          "header": [
+            {
+              "key": "content-type",
+              "value": "application/json"
+            },
+            {
+              "key": "date",
+              "value": "Fri, 02 Oct 2026 07:15:52 GMT"
+            },
+            {
+              "key": "content-length",
+              "value": "29"
+            }
+          ],
+          "cookie": [],
+          "body": "{\n  \"error\": \"hold has expired\"\n}"
+        }
+      ]
     }
   ]
 }
