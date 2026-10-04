@@ -8,10 +8,27 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jayantamadhav/ticket-service/internal/logging"
 	"github.com/jayantamadhav/ticket-service/internal/models"
 )
 
 const HoldTTL = 45 * time.Second
+
+// lockWaitTimeout bounds how long a single Reserve call will wait to acquire
+// its seat-row locks. Under extreme contention (many concurrent requests
+// colliding on overlapping seats), the queue to acquire a FOR UPDATE lock
+// can otherwise grow long enough to exceed a client's own request timeout —
+// the client gives up, its context is canceled mid-query, and that surfaced
+// as an unhandled 500 instead of a clean decline. A short statement_timeout
+// here makes "the seat is contended right now" fail fast as the same
+// ErrSeatUnavailable decline a genuinely-taken seat produces, rather than
+// hanging for tens of seconds and erroring out.
+const lockWaitTimeout = 3 * time.Second
+
+// pgQueryCanceled is Postgres's SQLSTATE for a statement terminated by
+// statement_timeout (or an explicit cancellation).
+const pgQueryCanceled = "57014"
 
 var (
 	ErrSeatUnavailable      = errors.New("seat unavailable")
@@ -30,11 +47,28 @@ var (
 // requested seat isn't available (including treating expired holds as
 // available), the whole request is declined and nothing is held.
 func (s *Store) Reserve(ctx context.Context, showID, userID, idempotencyKey string, seatLabels []string) (*models.Reservation, bool, error) {
+	start := time.Now()
 	tx, err := s.pool.Begin(ctx)
+	acquireMs := time.Since(start).Milliseconds()
 	if err != nil {
 		return nil, false, fmt.Errorf("begin tx: %w", err)
 	}
 	defer tx.Rollback(ctx)
+	// Diagnostic timing split: acquire_ms is time spent waiting for a free
+	// pgxpool connection (pool exhaustion shows up here, never in Postgres's
+	// own logs, since no statement has been sent yet at that point).
+	// total_ms is the full call including every query in the transaction.
+	// Logged unconditionally via defer so every return path (success or any
+	// decline/error) reports it the same way.
+	defer func() {
+		logging.FromContext(ctx).Info("reserve timing",
+			"show_id", showID, "user_id", userID,
+			"acquire_ms", acquireMs, "total_ms", time.Since(start).Milliseconds())
+	}()
+
+	if _, err := tx.Exec(ctx, fmt.Sprintf("SET LOCAL statement_timeout = %d", lockWaitTimeout.Milliseconds())); err != nil {
+		return nil, false, fmt.Errorf("set statement_timeout: %w", err)
+	}
 
 	existing, err := checkIdempotency(ctx, tx, userID, idempotencyKey, seatLabels)
 	if err != nil {
@@ -64,6 +98,13 @@ func (s *Store) Reserve(ctx context.Context, showID, userID, idempotencyKey stri
 		FOR UPDATE
 	`, showID, sortedSeats)
 	if err != nil {
+		if isLockTimeout(err) {
+			// Couldn't acquire the row lock(s) within lockWaitTimeout —
+			// something else is actively contending for one of these same
+			// seats. Treat it the same as "seat taken": a clean, fast
+			// decline rather than hanging until a client gives up.
+			return nil, false, ErrSeatUnavailable
+		}
 		return nil, false, fmt.Errorf("lock seats: %w", err)
 	}
 
@@ -152,6 +193,14 @@ func (s *Store) Reserve(ctx context.Context, showID, userID, idempotencyKey stri
 	}
 
 	return &reservation, false, nil
+}
+
+// isLockTimeout reports whether err is a Postgres statement_timeout
+// cancellation (SQLSTATE 57014) — the signal that lockWaitTimeout tripped
+// while waiting on a FOR UPDATE row lock.
+func isLockTimeout(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == pgQueryCanceled
 }
 
 func checkIdempotency(ctx context.Context, tx pgx.Tx, userID, idempotencyKey string, requestedSeats []string) (*models.Reservation, error) {

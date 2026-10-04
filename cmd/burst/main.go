@@ -159,17 +159,27 @@ func main() {
 
 	// 1. Hot-seat storm: N distinct users all fight over the exact same
 	// seat, fully simultaneously and uncapped — this is the one scenario
-	// where true all-at-once concurrency is the point of the test.
+	// where true all-at-once concurrency is the point of the test. Checked
+	// on its OWN wait group, immediately after it finishes, rather than
+	// after the whole burst: holds expire after HoldTTL (45s), and a
+	// 20k-request burst can easily run longer than that, which would make a
+	// seat a storm correctly won look "available" again by the time we
+	// finally check — a test-timing artifact, not a server bug.
 	fmt.Printf("\nstorming hot seat %q with %d concurrent users...\n", hotSeat, *hotSeatStormers)
+	var hotSeatWG sync.WaitGroup
 	for i := 0; i < *hotSeatStormers; i++ {
 		wg.Add(1)
+		hotSeatWG.Add(1)
 		go func(i int) {
 			defer wg.Done()
+			defer hotSeatWG.Done()
 			userID := fmt.Sprintf("hotseat-user-%d", i)
 			key := fmt.Sprintf("hotseat-%d-%d", i, time.Now().UnixNano())
 			reserve(client, *baseURL, show, userID, key, []string{hotSeat}, o)
 		}(i)
 	}
+	hotSeatWG.Wait()
+	checkHotSeat(client, *baseURL, show, hotSeat, *hotSeatStormers)
 
 	// 2. Background stampede: many users booking random seats elsewhere,
 	// to exercise ordinary contention + per-user-limit enforcement.
@@ -245,21 +255,6 @@ func main() {
 	fmt.Printf("available=%d held=%d confirmed=%d total=%d sum=%d (expected total=%d)\n",
 		state.Counts.Available, state.Counts.Held, state.Counts.Confirmed, state.Counts.Total, sum, *totalSeats)
 
-	fmt.Println("\n== hot-seat check ==")
-	hotSeatStatus := "MISSING"
-	for _, s := range state.Seats {
-		if s.Label == hotSeat {
-			hotSeatStatus = s.Status
-			break
-		}
-	}
-	fmt.Printf("seat %q final status: %s (exactly one of the %d stormers should have won it)\n",
-		hotSeat, hotSeatStatus, *hotSeatStormers)
-	if hotSeatStatus != "held" && hotSeatStatus != "confirmed" {
-		fmt.Println("HOT-SEAT CHECK FAILED: hot seat is not held/confirmed by anyone after the storm")
-		os.Exit(1)
-	}
-
 	if sum != *totalSeats {
 		fmt.Println("RECONCILIATION FAILED: available+held+confirmed != total_seats")
 		os.Exit(1)
@@ -269,6 +264,32 @@ func main() {
 		os.Exit(1)
 	}
 	fmt.Println("\nreconciliation OK, hot seat has exactly one holder, zero 5xx")
+}
+
+// checkHotSeat verifies the hot seat resolved to exactly one holder,
+// immediately after the storm (not after the whole burst) so hold-expiry
+// (HoldTTL, 45s) can't make a correctly-won seat look unclaimed just because
+// the rest of a large burst took a while to finish.
+func checkHotSeat(client *http.Client, baseURL, showID, hotSeat string, stormers int) {
+	fmt.Println("\n== hot-seat check (right after the storm) ==")
+	state, err := getShowState(client, baseURL, showID)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to fetch show state for hot-seat check: %v\n", err)
+		os.Exit(1)
+	}
+	hotSeatStatus := "MISSING"
+	for _, s := range state.Seats {
+		if s.Label == hotSeat {
+			hotSeatStatus = s.Status
+			break
+		}
+	}
+	fmt.Printf("seat %q status: %s (exactly one of the %d stormers should have won it)\n",
+		hotSeat, hotSeatStatus, stormers)
+	if hotSeatStatus != "held" && hotSeatStatus != "confirmed" {
+		fmt.Println("HOT-SEAT CHECK FAILED: hot seat is not held/confirmed by anyone right after the storm")
+		os.Exit(1)
+	}
 }
 
 func envOr(key, fallback string) string {
